@@ -10,11 +10,11 @@ with open(path.join(here, 'README.md'), encoding='utf-8') as f:
 
 setup(
     name='fdm',
-    version='1.0.0',
+    version='1.0.1',
     description='An opinionated helper to deploy docker images',
     long_description=long_description,
     url='https://github.com/steffenmllr/fabric-docker-microservices',
-    author='Steffen Müller',
+    author='Steffen Mueller',
     author_email='steffen@mllrsohn.com',
     license='MIT',
     classifiers=[
@@ -24,7 +24,6 @@ setup(
         'License :: OSI Approved :: MIT License',
         'Programming Language :: Python :: 2.7'
     ],
-    packages=['fdm'],
     install_requires=[
         'Fabric',
         'pytoml'

@@ -1,3 +1,2 @@
 # -*- coding: utf-8 -*-
-from fdm import *
-from fdm import setStage, setContainer, _run, _cd, _folderExists
+from fdm import deploy, running, checkStage, checkContainer, _run, _cd, _folderExists, loadConfig, settings

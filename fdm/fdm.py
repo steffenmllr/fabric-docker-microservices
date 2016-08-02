@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-from fabric.api import env, task, run, local, cd, lcd, prompt, execute
+from fabric.api import env, task, run, local, cd, lcd, prompt, execute, runs_once, sudo, roles
 from fabric import utils
 from fabric.main import is_task_object
 from fabric.contrib import console
@@ -10,52 +10,35 @@ import time
 
 
 # Only show Tasks in this list
-__all__ = ['deploy', 'build', 'running', 'run']
+__all__ = ['deploy', 'build', 'running', 'stage' '_run']
 
 # Configs
-env.STAGES = []
+#env.STAGES = []
 os.environ["pwd"] = os.getcwd()
-
 
 ##
 # Helper Functions
 ##
 current_milli_time = lambda: int(round(time.time() * 1000))
-def _stage_set(stage_name=False):
-    configPath = os.path.join(env.configDir, "%s.toml" % (stage_name))
-    with open(configPath, 'rb') as fin:
-        config = toml.load(fin)
 
-    dump = json.dumps(config)
-    json_str = os.path.expandvars(dump)
-    config = json.loads(json_str)
-
+def _stage_set(stage_name, config):
     env.stage = stage_name
     for option, value in config.items():
         setattr(env, option, value)
 
     return config
 
-def setStage(f):
+def checkStage(f):
     def nf(*args, **kwargs):
-        stage = kwargs.get('stage', None)
-        if not stage or stage not in env.STAGES:
-            utils.abort("You need to provide a valid stage")
-        else:
-            _stage_set(stage)
+        if not env.stage:
+            utils.abort("You need to provide a valid stage eg. fab stage=production deploy:redis")
         return f(*args, **kwargs)
     return nf
 
-
-def setContainer(f):
+def checkContainer(f):
     def nf(*args, **kwargs):
-        container = kwargs.get('container', None)
-        container = env.containers.get(container, None)
-        if not container:
-            utils.abort("Could not find container")
-        else:
-            setattr(env, 'container', container)
-
+        if not env.container:
+            utils.abort("Could not find container in env")
         return f(*args, **kwargs)
     return nf
 
@@ -78,41 +61,83 @@ def _cd(command):
     else:
         return cd(command)
 
+
+def loadConfig(stages=[], configDir="./"):
+    for stage_name in stages:
+        configPath = os.path.join(configDir, "%s.toml" % (stage_name))
+        with open(configPath, 'rb') as fin:
+            config = toml.load(fin)
+
+        dump = json.dumps(config)
+        json_str = os.path.expandvars(dump)
+        config = json.loads(json_str)
+        env.roledefs[stage_name] = config
+
 ##
 # Tasks
 ##
 
-@setStage
-@setContainer
+# Sets the stage and the container
+def settings(stage=False, container=False):
+    config = env.roledefs[stage]
+    env.container = False
+    _stage_set(stage, config)
+    if container:
+        container = env.containers[container]
+        setattr(env, 'container', container)
+
+
+# Checks for settings
+def checkSettings(f):
+    def nf(*args, **kwargs):
+        stage = kwargs.get('stage', env.stage)
+        container = kwargs.get('container', env.container)
+
+        if not stage:
+            utils.abort("Need to set a stage")
+
+        if container:
+            if isinstance(container, str):
+                container = env.containers[container]
+
+        if not container:
+            utils.abort("Need to set a container")
+
+        return f(stage=stage, container=container)
+    return nf
+
+
+
+@checkSettings
 @task
 def running(stage=False, container=False):
     """
     Get the Running Container
     """
-    cmd = 'docker ps | grep "%s_%s" | awk \'{print $1}\'' % (env.stage,env.container['name'],)
-    return _run(cmd, capture=True).strip().splitlines()
+    cmd = 'docker ps | grep "%s_%s" | awk \'{print $1}\'' % (stage,container['name'],)
+    return _run(cmd).strip().splitlines()
 
 
-@setStage
-@setContainer
+
+@checkSettings
 @task
 def setup(stage=False, container=False):
     """
     Setups the repo
     """
-    _run('rm -fr {repopath}'.format(repopath=env.container['code_dir']))
-    _run('git clone --branch={branch} --depth=1 {url} {repopath}'.format(branch=env.container['branch'],url=env.container['build'],repopath=env.container['code_dir']))
+    _run('rm -fr {repopath}'.format(repopath=container['code_dir']))
+    _run('git clone --branch={branch} --depth=1 {url} {repopath}'.format(branch=container['branch'],url=container['build'],repopath=container['code_dir']))
 
 
-@setStage
-@setContainer
+
+@checkSettings
 @task
 def build(stage=False, container=False):
     """
     Build or pull a container
     """
-    hasImage = env.container.get('image', None)
-    hasBuild = env.container.get('build', None)
+    hasImage = container.get('image', None)
+    hasBuild = container.get('build', None)
     if not hasImage and not hasBuild:
         utils.abort("No image or build path defined")
     if hasImage:
@@ -120,23 +145,34 @@ def build(stage=False, container=False):
         return hasImage
 
     if hasBuild:
-        if not _folderExists(env.container['code_dir']):
+        if not _folderExists(container['code_dir']):
             setup(stage=stage, container=container)
         else:
-            with _cd(env.container['code_dir']):
+            with _cd(container['code_dir']):
                 _run('git fetch origin')
-                _run('git checkout {branch}'.format(branch=env.container['branch']))
+                _run('git checkout {branch}'.format(branch=container['branch']))
                 _run('git reset --hard')
                 _run('git clean -d -x -f')
-                _run('git pull origin {branch}'.format(branch=env.container['branch']))
+                _run('git pull origin {branch}'.format(branch=container['branch']))
 
                 gitHash = _run("git describe --always", capture=True).strip()
-                tagName = "{containerName}_{stage}/{gitHash}".format(containerName=env.container['name'], gitHash=gitHash, stage=stage)
-                _run('docker build --tag {tagName} .'.format(tagName=tagName))
+                tagName = "{containerName}_{stage}/{gitHash}".format(containerName=container['name'], gitHash=gitHash, stage=stage)
+
+                command = [
+                    "docker",
+                    "build",
+                    "--tag {tagName}".format(tagName=tagName),
+                    "."
+                ]
+
+                command = " ".join(map(str, command))
+                with _cd(container.get('build_path', container['code_dir']) ):
+                    _run(command)
+
                 return tagName
 
-@setStage
-@setContainer
+
+@checkSettings
 @task
 def deploy(stage=False, container=False):
     """
@@ -149,49 +185,57 @@ def deploy(stage=False, container=False):
     # Stop Running container
     def _stop():
         # Stop Running Container
-        for container in runningContainers:
-            _run('docker rm -f {container}'.format(container=container))
+        for runningContainer in runningContainers:
+            _run('docker rm -f {container}'.format(container=runningContainer))
 
     # Build Run Command
     command = [
         "sudo",
         "docker",
         "run",
-        "--name {stage}_{containerName}_{deploy_time}".format(containerName=env.container['name'], stage=env.stage, deploy_time=deploy_time),
+        "--name {stage}_{containerName}_{deploy_time}".format(containerName=container['name'], stage=stage, deploy_time=deploy_time),
         "-d",
         "--restart=always",
     ]
 
+    additionalCommands = [];
+
     # Environment
-    environments = env.container.get('environments', [])
+    environments = container.get('environments', [])
     for environment in environments:
-        command.append("-e {environment}".format(environment=environment))
+        additionalCommands.append("-e {environment}".format(environment=environment))
 
     # Volumes
-    volumes = env.container.get('volumes', [])
+    volumes = container.get('volumes', [])
     for volume in volumes:
-        command.append("-v {volume}".format(volume=volume))
+        additionalCommands.append("-v {volume}".format(volume=volume))
 
     # Ports
-    ports = env.container.get('ports', [])
+    ports = container.get('ports', [])
     for port in ports:
-        command.append("-p {port}".format(port=port))
+        additionalCommands.append("-p {port}".format(port=port))
 
     # Other Commands
-    cmds = env.container.get('cmds', [])
+    cmds = container.get('cmds', [])
     for cmd in cmds:
-        command.append(cmd)
+        additionalCommands.append(cmd)
+
+    # Check for before Hooks
+    hook_before_deploy = container.get('hook_before_deploy', None)
+    print hook_before_deploy
+    if hook_before_deploy:
+        execute(hook_before_deploy, image=containerImage, commands=additionalCommands)
+
+    return
+
+    # Merge commands
+    command = command + additionalCommands
 
     # Image
     command.append(containerImage)
 
     # Join Command
     command = " ".join(map(str, command))
-
-    # Check for before Hooks
-    hook_before_deploy = env.container.get('hook_before_deploy', None)
-    if hook_before_deploy:
-        execute(hook_before_deploy, containerImage=containerImage)
 
     # If we have exposed ports, we need to stop the container first
     if len(ports) > 0:
@@ -205,15 +249,14 @@ def deploy(stage=False, container=False):
         _stop()
 
     # Check for after Hooks
-    hook_after_deploy = env.container.get('hook_after_deploy', None)
+    hook_after_deploy = container.get('hook_after_deploy', None)
     if hook_after_deploy:
-        execute(hook_after_deploy, containerImage=containerImage)
+        execute(hook_after_deploy, image=containerImage, commands=additionalCommands)
 
 
-@setStage
-@setContainer
+@checkSettings
 @task
-def run(stage=False, container=False, cmd=False):
+def interactive(stage=False, container=False, cmd=False):
     """
     Run the container
     """
@@ -226,7 +269,7 @@ def run(stage=False, container=False, cmd=False):
         "sudo",
         "docker",
         "run",
-        "--name run_{stage}_{containerName}_{deploy_time}".format(containerName=env.container['name'], stage=env.stage, deploy_time=deploy_time),
+        "--name run_{stage}_{containerName}_{deploy_time}".format(containerName=container['name'], stage=stage, deploy_time=deploy_time),
         "-it",
         containerImage,
 
