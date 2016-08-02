@@ -1,0 +1,41 @@
+hosts = ['127.0.0.1']
+environment = "staging"
+
+[containers.dnsdock]
+name = "dnsdock"
+image = "tonistiigi/dnsdock"
+volumes = [
+    "/var/run/docker.sock:/var/run/docker.sock",
+]
+ports = [
+    "172.17.42.1:53:53/udp"
+]
+
+[containers.redis]
+name = "redis"
+image = "redis"
+environments = [
+    "DNSDOCK_NAME=staging",
+    "DNSDOCK_IMAGE=redis"
+]
+
+[containers.app_1]
+name = "app_1"
+build = "https://${GITHUB_USERNAME}:${GITHUB_TOKEN}@github.com/steffenmllr/cloaked-batman.git"
+code_dir = "${pwd}/local/app_1"
+hook_before_deploy="before_deploy"
+environments = [
+    "NODE_ENV=staging",
+    "DNSDOCK_NAME=staging",
+    "DNSDOCK_IMAGE=app_1"
+]
+
+[containers.app_2]
+name = "app_1"
+build = "https://${GITHUB_USERNAME}:${GITHUB_TOKEN}@github.com/steffenmllr/cloaked-batman.git"
+code_dir = "${pwd}/local/app_2"
+environments = [
+    "NODE_ENV=staging",
+    "DNSDOCK_NAME=staging",
+    "DNSDOCK_IMAGE=app_2"
+]
