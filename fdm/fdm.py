@@ -182,8 +182,9 @@ def running(stage, container):
     Get the Running Container
     """
     with hide('output', 'running'):
-        cmd = 'docker ps | grep "%s_%s" | awk \'{print $1}\'' % (stage,container['name'],)
-        return _run(cmd).strip().splitlines()
+        cmd = 'docker ps | grep "%s_%s" | awk \'{print $1}\'' % (stage, container['name'],)
+        result = _run(cmd, capture=True).strip().splitlines()
+        return result
 
 
 def status():
@@ -279,6 +280,7 @@ def deploy(stage, container):
     runningContainers = running(stage=stage, container=container)
     containerImage = build(stage=stage, container=container)
     deploy_time = current_milli_time()
+    print runningContainers
 
     # Stop Running container
     def _stop():
