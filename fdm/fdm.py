@@ -244,7 +244,8 @@ def build(stage, container):
                 _run('git pull origin {branch}'.format(branch=container['branch']))
 
                 gitHash = _run("git describe --always", capture=True).strip()
-                tagName = "{containerName}_{stage}:{gitHash}".format(containerName=container['name'], gitHash=gitHash, stage=stage)
+                tagName = "{containerName}/{stage}:{gitHash}".format(containerName=container['name'], gitHash=gitHash, stage=stage)
+                tagNameLastest = "{containerName}/{stage}:latest".format(containerName=container['name'], stage=stage)
 
                 # Check if the image exists
                 exists = _run('docker images -q %s | awk \'{print $1}\'' % (tagName)).strip().splitlines()
@@ -257,6 +258,7 @@ def build(stage, container):
                     "docker",
                     "build",
                     "--tag {tagName}".format(tagName=tagName),
+                    "--tag {tagNameLastest}".format(tagNameLastest=tagNameLastest),
                     "."
                 ]))
 
