@@ -1,7 +1,8 @@
 # -*- coding: utf-8 -*-
-from fabric.api import env, task, run, local, cd, lcd, prompt, execute, runs_once, sudo, roles, get
+from fabric.api import env, task, run, local, cd, lcd, prompt, execute, runs_once, sudo, roles, get, hide
 from fabric import utils
 from fabric.main import is_task_object
+from fabric.colors import red, green
 from fabric.contrib import console
 from functools import wraps
 import pytoml as toml
@@ -179,9 +180,27 @@ def running(stage, container):
     """
     Get the Running Container
     """
+    with hide('output', 'running'):
+        cmd = 'docker ps | grep "%s_%s" | awk \'{print $1}\'' % (stage,container['name'],)
+        return _run(cmd).strip().splitlines()
 
-    cmd = 'docker ps | grep "%s_%s" | awk \'{print $1}\'' % (stage,container['name'],)
-    return _run(cmd).strip().splitlines()
+
+def status():
+    """
+    Checks if all the containers are running
+    """
+
+    stage = env.stage
+    if not stage:
+        utils.abort("Need to set a stage")
+
+
+    for name, container in env.containers.items():
+        runningContainers = running(stage=stage, container=container)
+        if len(runningContainers) > 0:
+            print green("{stage}_{name} is running {size} container".format(name=name, stage=stage, size=len(runningContainers)))
+        else:
+            print red("{stage}_{name} is NOT running".format(name=name, stage=stage))
 
 
 
@@ -233,8 +252,8 @@ def build(stage, container):
                     "."
                 ]))
 
-                # with _cd(container.get('build_path', container['code_dir']) ):
-                #     _run(command)
+                with _cd(container.get('build_path', container['code_dir']) ):
+                    _run(command)
 
                 return tagName
 
@@ -245,6 +264,7 @@ def deploy(stage, container):
     """
     Build and restart a container: (fab settings:stage=staging,container=app_1 deploy)
     """
+    execute("status");
 
     runningContainers = running(stage=stage, container=container)
     containerImage = build(stage=stage, container=container)
