@@ -236,37 +236,37 @@ def build(stage, container):
     if hasBuild:
         if not _folderExists(container['code_dir']):
             setup(stage=stage, container=container)
-        else:
-            with _cd(container['code_dir']):
-                _run('git fetch origin')
-                _run('git checkout {branch}'.format(branch=container['branch']))
-                _run('git reset --hard')
-                _run('git clean -d -x -f')
-                _run('git pull origin {branch}'.format(branch=container['branch']))
 
-                gitHash = _run("git describe --always", capture=True).strip()
-                tagName = "{containerName}/{stage}:{gitHash}".format(containerName=container['name'], gitHash=gitHash, stage=stage)
-                tagNameLastest = "{containerName}/{stage}:latest".format(containerName=container['name'], stage=stage)
+        with _cd(container['code_dir']):
+            _run('git fetch origin')
+            _run('git checkout {branch}'.format(branch=container['branch']))
+            _run('git reset --hard')
+            _run('git clean -d -x -f')
+            _run('git pull origin {branch}'.format(branch=container['branch']))
 
-                # Check if the image exists
-                exists = _run('docker images -q %s | awk \'{print $1}\'' % (tagName)).strip().splitlines()
-                if len(exists) != 0:
-                    print "\n" + red("Image {tagName} already exists, skip building".format(tagName=tagName)) + "\n"
-                    return tagName
+            gitHash = _run("git describe --always", capture=True).strip()
+            tagName = "{containerName}/{stage}:{gitHash}".format(containerName=container['name'], gitHash=gitHash, stage=stage)
+            tagNameLastest = "{containerName}/{stage}:latest".format(containerName=container['name'], stage=stage)
 
-
-                command = " ".join(map(str, [
-                    "docker",
-                    "build",
-                    "--tag {tagName}".format(tagName=tagName),
-                    "--tag {tagNameLastest}".format(tagNameLastest=tagNameLastest),
-                    "."
-                ]))
-
-                with _cd(container.get('build_path', container['code_dir']) ):
-                    _run(command)
-
+            # Check if the image exists
+            exists = _run('docker images -q %s | awk \'{print $1}\'' % (tagName)).strip().splitlines()
+            if len(exists) != 0:
+                print "\n" + red("Image {tagName} already exists, skip building".format(tagName=tagName)) + "\n"
                 return tagName
+
+
+            command = " ".join(map(str, [
+                "docker",
+                "build",
+                "--tag {tagName}".format(tagName=tagName),
+                "--tag {tagNameLastest}".format(tagNameLastest=tagNameLastest),
+                "."
+            ]))
+
+            with _cd(container.get('build_path', container['code_dir']) ):
+                _run(command)
+
+            return tagName
 
 
 @checkSettings
@@ -280,7 +280,6 @@ def deploy(stage, container):
     runningContainers = running(stage=stage, container=container)
     containerImage = build(stage=stage, container=container)
     deploy_time = current_milli_time()
-    print runningContainers
 
     # Stop Running container
     def _stop():
