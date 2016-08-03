@@ -1,9 +1,10 @@
 # -*- coding: utf-8 -*-
-from fabric.api import env, task, run, local, cd, lcd, prompt, execute, runs_once, sudo, roles, get, hide
+from fabric.api import env, task, run, local, cd, lcd, prompt, execute, sudo, roles, get, hide
 from fabric import utils
 from fabric.main import is_task_object
 from fabric.colors import red, green
 from fabric.contrib import console
+from fabric.contrib.files import exists
 from functools import wraps
 import pytoml as toml
 import json
@@ -243,7 +244,14 @@ def build(stage, container):
                 _run('git pull origin {branch}'.format(branch=container['branch']))
 
                 gitHash = _run("git describe --always", capture=True).strip()
-                tagName = "{containerName}_{stage}/{gitHash}".format(containerName=container['name'], gitHash=gitHash, stage=stage)
+                tagName = "{containerName}_{stage}:{gitHash}".format(containerName=container['name'], gitHash=gitHash, stage=stage)
+
+                # Check if the image exists
+                exists = _run('docker images -q %s | awk \'{print $1}\'' % (tagName)).strip().splitlines()
+                if len(exists) != 0:
+                    print "\n" + red("Image {tagName} already exists, skip building".format(tagName=tagName)) + "\n"
+                    return tagName
+
 
                 command = " ".join(map(str, [
                     "docker",
@@ -302,6 +310,7 @@ def deploy(stage, container):
     # Join Command
     command = " ".join(map(str, command))
 
+    ports = container.get('ports', [])
     # If we have exposed ports, we need to stop the container first
     if len(ports) > 0:
         _stop()
