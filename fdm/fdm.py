@@ -1,8 +1,9 @@
 # -*- coding: utf-8 -*-
-from fabric.api import env, task, run, local, cd, lcd, prompt, execute, runs_once, sudo, roles
+from fabric.api import env, task, run, local, cd, lcd, prompt, execute, runs_once, sudo, roles, get
 from fabric import utils
 from fabric.main import is_task_object
 from fabric.contrib import console
+from functools import wraps
 import pytoml as toml
 import json
 import os
@@ -10,7 +11,7 @@ import time
 
 
 # Only show Tasks in this list
-__all__ = ['deploy', 'build', 'running', 'stage' '_run']
+__all__ = ['deploy', 'build', 'running', 'stage' '_run', 'interactive', 'backup_db']
 
 # Configs
 #env.STAGES = []
@@ -73,12 +74,42 @@ def loadConfig(stages=[], configDir="./"):
         config = json.loads(json_str)
         env.roledefs[stage_name] = config
 
+
+def _getAdditionalDockerCommands(container):
+    additionalCommands = []
+
+    # Environment
+    environments = container.get('environments', [])
+    for environment in environments:
+        additionalCommands.append("-e {environment}".format(environment=environment))
+
+    # Volumes
+    volumes = container.get('volumes', [])
+    for volume in volumes:
+        additionalCommands.append("-v {volume}".format(volume=volume))
+
+    # Ports
+    ports = container.get('ports', [])
+    for port in ports:
+        additionalCommands.append("-p {port}".format(port=port))
+
+    # Other Commands
+    cmds = container.get('cmds', [])
+    for cmd in cmds:
+        additionalCommands.append(cmd)
+
+    return additionalCommands
+
 ##
 # Tasks
 ##
 
-# Sets the stage and the container
-def settings(stage=False, container=False):
+#
+def settings(stage, container=False):
+    """
+    Sets the stage and the container
+    """
+
     config = env.roledefs[stage]
     env.container = False
     _stage_set(stage, config)
@@ -89,9 +120,10 @@ def settings(stage=False, container=False):
 
 # Checks for settings
 def checkSettings(f):
-    def nf(*args, **kwargs):
-        stage = kwargs.get('stage', env.stage)
-        container = kwargs.get('container', env.container)
+    @wraps(f)
+    def wrapper(*args, **kwds):
+        stage = kwds.get('stage', env.stage)
+        container = kwds.get('container', env.container)
 
         if not stage:
             utils.abort("Need to set a stage")
@@ -103,17 +135,51 @@ def checkSettings(f):
         if not container:
             utils.abort("Need to set a container")
 
-        return f(stage=stage, container=container)
-    return nf
+        kwds_dic = {'container': container, 'stage': stage}
 
+        # Command
+        cmd = kwds.get('cmd', False)
+        if cmd:
+            kwds_dic['cmd'] = cmd
+
+        # Commands
+        commands = kwds.get('commands', False)
+        if cmd:
+            kwds_dic['commands'] = commands
+
+        return f(*args, **kwds_dic)
+    return wrapper
+
+
+def checkDatabseSettings(f):
+    @wraps(f)
+    def wrapper(*args, **kwds):
+        stage = env.stage
+        if not stage:
+            utils.abort("Need to set a stage")
+
+        if not args:
+            utils.abort("Need to set a database")
+
+        try:
+            database =  env.roledefs[stage]['database'][args[0]]
+        except KeyError:
+            utils.abort("Database not found")
+
+        kwds_dic = {'stage': stage, 'database':database, 'name': args[0]}
+        kargs = []
+
+        return f(*kargs, **kwds_dic)
+    return wrapper
 
 
 @checkSettings
 @task
-def running(stage=False, container=False):
+def running(stage, container):
     """
     Get the Running Container
     """
+
     cmd = 'docker ps | grep "%s_%s" | awk \'{print $1}\'' % (stage,container['name'],)
     return _run(cmd).strip().splitlines()
 
@@ -121,10 +187,11 @@ def running(stage=False, container=False):
 
 @checkSettings
 @task
-def setup(stage=False, container=False):
+def setup(stage, container):
     """
     Setups the repo
     """
+
     _run('rm -fr {repopath}'.format(repopath=container['code_dir']))
     _run('git clone --branch={branch} --depth=1 {url} {repopath}'.format(branch=container['branch'],url=container['build'],repopath=container['code_dir']))
 
@@ -132,10 +199,11 @@ def setup(stage=False, container=False):
 
 @checkSettings
 @task
-def build(stage=False, container=False):
+def build(stage, container):
     """
     Build or pull a container
     """
+
     hasImage = container.get('image', None)
     hasBuild = container.get('build', None)
     if not hasImage and not hasBuild:
@@ -158,26 +226,26 @@ def build(stage=False, container=False):
                 gitHash = _run("git describe --always", capture=True).strip()
                 tagName = "{containerName}_{stage}/{gitHash}".format(containerName=container['name'], gitHash=gitHash, stage=stage)
 
-                command = [
+                command = " ".join(map(str, [
                     "docker",
                     "build",
                     "--tag {tagName}".format(tagName=tagName),
                     "."
-                ]
+                ]))
 
-                command = " ".join(map(str, command))
-                with _cd(container.get('build_path', container['code_dir']) ):
-                    _run(command)
+                # with _cd(container.get('build_path', container['code_dir']) ):
+                #     _run(command)
 
                 return tagName
 
 
 @checkSettings
 @task
-def deploy(stage=False, container=False):
+def deploy(stage, container):
     """
-    Build and restart a container
+    Build and restart a container: (fab settings:stage=staging,container=app_1 deploy)
     """
+
     runningContainers = running(stage=stage, container=container)
     containerImage = build(stage=stage, container=container)
     deploy_time = current_milli_time()
@@ -198,35 +266,12 @@ def deploy(stage=False, container=False):
         "--restart=always",
     ]
 
-    additionalCommands = [];
-
-    # Environment
-    environments = container.get('environments', [])
-    for environment in environments:
-        additionalCommands.append("-e {environment}".format(environment=environment))
-
-    # Volumes
-    volumes = container.get('volumes', [])
-    for volume in volumes:
-        additionalCommands.append("-v {volume}".format(volume=volume))
-
-    # Ports
-    ports = container.get('ports', [])
-    for port in ports:
-        additionalCommands.append("-p {port}".format(port=port))
-
-    # Other Commands
-    cmds = container.get('cmds', [])
-    for cmd in cmds:
-        additionalCommands.append(cmd)
+    additionalCommands = _getAdditionalDockerCommands(container)
 
     # Check for before Hooks
     hook_before_deploy = container.get('hook_before_deploy', None)
-    print hook_before_deploy
     if hook_before_deploy:
         execute(hook_before_deploy, image=containerImage, commands=additionalCommands)
-
-    return
 
     # Merge commands
     command = command + additionalCommands
@@ -253,12 +298,13 @@ def deploy(stage=False, container=False):
     if hook_after_deploy:
         execute(hook_after_deploy, image=containerImage, commands=additionalCommands)
 
+    return {'stage': stage, 'container': container}
 
 @checkSettings
 @task
-def interactive(stage=False, container=False, cmd=False):
+def interactive(stage=False, container=False, cmd=False, commands=False):
     """
-    Run the container
+    Run the container -it
     """
 
     containerImage = build(stage=stage, container=container)
@@ -270,20 +316,93 @@ def interactive(stage=False, container=False, cmd=False):
         "docker",
         "run",
         "--name run_{stage}_{containerName}_{deploy_time}".format(containerName=container['name'], stage=stage, deploy_time=deploy_time),
-        "-it",
-        containerImage,
-
+        "-it"
     ]
+
+    # Env vars
+    if commands:
+        command = command + commands
+    else:
+        command = command + _getAdditionalDockerCommands(container)
+
+    # Append Image
+    command.append(containerImage)
 
     # Image
     if cmd:
         command.append("sh -c")
         command.append("\"%s\"" % cmd)
-    else:
-        command.append("/bin/sh")
 
     # Join Command
     command = " ".join(map(str, command))
 
     # Run Container
     _run(command)
+
+    return {'stage': stage, 'container': container, 'cmd': cmd}
+
+
+@checkDatabseSettings
+@task
+def backup_db(stage, database, name):
+    """
+    Backups and pg db and restores it locally (fab settings:stage=staging,database=db_1 backup_db)
+    """
+
+    # Generate Filename
+    timestamp = current_milli_time()
+    backup_file = "{databaseName}-{stage}-snapshot-{timestamp}".format(databaseName=name, stage=stage, timestamp=timestamp)
+
+    # Generate local Backup Folder
+    local('mkdir -p {backupFolder}'.format(backupFolder=database['backup_dir']))
+
+    # Remote Backup Folder
+    _run('mkdir -p /tmp/backups/database')
+
+    # Backup Command
+    backup_command = " ".join(map(str, [
+        "PGPASSWORD={remotePassword}".format(remotePassword=database['remote_password']),
+        "pg_dump",
+        "-i",
+        "-p {port}".format(port=database['remote_port']),
+        "-h {host}".format(host=database['remote_host']),
+        "-U {user}".format(user=database['local_user']),
+        "-F c -b -v",
+        "-f /backups/{backup_file}".format(backup_file=backup_file),
+        "{databaseName}".format(databaseName=database['remote_database'])
+    ]))
+
+    # Docker Backup Command
+    command = " ".join(map(str, [
+        "docker",
+        "run",
+        "-v /tmp/backups/database:/backups",
+        "-it",
+        database['image'],
+        "sh",
+        "-c",
+        "\"{backup_command}\"".format(backup_command=backup_command)
+    ]))
+
+    # Run Command
+    _run(command)
+
+    # Get the Backup
+    if stage is not 'local':
+        get('/tmp/backups/database/{backup_file}'.format(backup_file=backup_file), database['backup_dir'])
+
+    # Restore the local database
+    if console.confirm("Do you want to replace your local '{databaseName}' databases".format(databaseName=database['local_database'])):
+        local("dropdb -U {user} {databaseName}".format(user=database['local_user'], databaseName=database['local_database']))
+        local("createdb -U {user} {databaseName}".format(user=database['local_user'], databaseName=database['local_database']))
+        restore_command = " ".join(map(str, [
+            "PGPASSWORD={remotePassword}".format(remotePassword=database['remote_password']),
+            "pg_restore",
+            "-p {port}".format(port=database['local_port']),
+            "-U {user}".format(user=database['local_user']),
+            "-d {databaseName}".format(databaseName=database['local_database']),
+            "-v {backupFolder}/{backup_file}".format(backupFolder=database['backup_dir'], backup_file=backup_file)
+        ]))
+
+        local(restore_command)
+
