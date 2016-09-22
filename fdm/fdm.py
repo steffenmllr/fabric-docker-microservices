@@ -250,9 +250,9 @@ def build(stage, container):
 
             # Check if the image exists
             exists = _run('docker images -q %s | awk \'{print $1}\'' % (tagName)).strip().splitlines()
-            # if len(exists) != 0:
-            #     print "\n" + red("Image {tagName} already exists, skip building".format(tagName=tagName)) + "\n"
-            #     return tagName
+            if len(exists) != 0:
+                print "\n" + red("Image {tagName} already exists, skip building".format(tagName=tagName)) + "\n"
+                return tagName
 
 
             command = " ".join(map(str, [
@@ -302,7 +302,7 @@ def deploy(stage, container):
     # Check for before Hooks
     hook_before_deploy = container.get('hook_before_deploy', None)
     if hook_before_deploy:
-        execute(hook_before_deploy, image=containerImage, commands=additionalCommands)
+        execute(hook_before_deploy, image=containerImage, commands=list(additionalCommands))
 
     # Merge commands
     command = command + additionalCommands
@@ -328,18 +328,21 @@ def deploy(stage, container):
     # Check for after Hooks
     hook_after_deploy = container.get('hook_after_deploy', None)
     if hook_after_deploy:
-        execute(hook_after_deploy, image=containerImage, commands=additionalCommands)
+        execute(hook_after_deploy, image=containerImage, commands=list(additionalCommands))
 
     return {'stage': stage, 'container': container}
 
 @checkSettings
 @task
-def interactive(stage=False, container=False, cmd=False, commands=False):
+def interactive(stage=False, container=False, cmd=False, commands=False, build=True):
     """
     Run the container -it
     """
+    if build:
+        containerImage = build(stage=stage, container=container)
+    else:
+        containerImage = "{containerName}/{stage}:latest".format(containerName=container['name'], stage=stage)
 
-    containerImage = build(stage=stage, container=container)
     deploy_time = current_milli_time()
 
     # Build Run Command
