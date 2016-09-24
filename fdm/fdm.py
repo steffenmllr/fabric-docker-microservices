@@ -334,11 +334,11 @@ def deploy(stage, container):
 
 @checkSettings
 @task
-def interactive(stage=False, container=False, cmd=False, commands=False, build=True):
+def interactive(stage=False, container=False, cmd=False, commands=False, rebuild=True):
     """
     Run the container -it
     """
-    if build:
+    if rebuild:
         containerImage = build(stage=stage, container=container)
     else:
         containerImage = "{containerName}/{stage}:latest".format(containerName=container['name'], stage=stage)
