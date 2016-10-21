@@ -276,6 +276,7 @@ def deploy(stage, container):
     Build and restart a container: (fab settings:stage=staging,container=app_1 deploy)
     """
     execute("status");
+    start = time.time()
 
     runningContainers = running(stage=stage, container=container)
     containerImage = build(stage=stage, container=container)
@@ -329,6 +330,12 @@ def deploy(stage, container):
     hook_after_deploy = container.get('hook_after_deploy', None)
     if hook_after_deploy:
         execute(hook_after_deploy, image=containerImage, commands=list(additionalCommands))
+
+    end = time.time()
+    duration = end - start
+    minutes, seconds = divmod(duration, 60)
+
+    print green("Deployment completed in {minutes}:{seconds}".format(minutes=minutes, seconds=seconds))
 
     return {'stage': stage, 'container': container}
 
