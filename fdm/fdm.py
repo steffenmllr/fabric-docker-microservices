@@ -295,6 +295,7 @@ def deploy(stage, container):
         "run",
         "--name {stage}_{containerName}_{deploy_time}".format(containerName=container['name'], stage=stage, deploy_time=deploy_time),
         "-d",
+        "-e CURRENT_RELEASE='{currentRelease}'".format(currentRelease=containerImage),
         "--restart=always",
     ]
 
@@ -357,6 +358,7 @@ def interactive(stage=False, container=False, cmd=False, commands=False, rebuild
         "sudo",
         "docker",
         "run",
+        "-e CURRENT_RELEASE='{currentRelease}'".format(currentRelease=containerImage),
         "--name run_{stage}_{containerName}_{deploy_time}".format(containerName=container['name'], stage=stage, deploy_time=deploy_time),
         "-it"
     ]
