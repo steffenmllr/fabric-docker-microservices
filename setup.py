@@ -10,7 +10,7 @@ with open(path.join(here, 'README.md'), encoding='utf-8') as f:
 
 setup(
     name='fdm',
-    version='1.0.1',
+    version='1.2.0',
     description='An opinionated helper to deploy docker images',
     long_description=long_description,
     url='https://github.com/steffenmllr/fabric-docker-microservices',
