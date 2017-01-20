@@ -410,7 +410,7 @@ def backup_db(stage, database, name):
         "-i",
         "-p {port}".format(port=database['remote_port']),
         "-h {host}".format(host=database['remote_host']),
-        "-U {user}".format(user=database['local_user']),
+        "-U {user}".format(user=database['remote_user']),
         "-F c -b -v",
         "-f /backups/{backup_file}".format(backup_file=backup_file),
         "{databaseName}".format(databaseName=database['remote_database'])
@@ -440,7 +440,7 @@ def backup_db(stage, database, name):
         local("dropdb -U {user} {databaseName}".format(user=database['local_user'], databaseName=database['local_database']))
         local("createdb -U {user} {databaseName}".format(user=database['local_user'], databaseName=database['local_database']))
         restore_command = " ".join(map(str, [
-            "PGPASSWORD={remotePassword}".format(remotePassword=database['remote_password']),
+            "PGPASSWORD={remotePassword}".format(remotePassword=database['local_password']),
             "pg_restore",
             "-p {port}".format(port=database['local_port']),
             "-U {user}".format(user=database['local_user']),
