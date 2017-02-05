@@ -5,3 +5,4 @@
 tmp
 env
 fdm.egg-info/
+.direnv/

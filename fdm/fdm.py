@@ -6,6 +6,7 @@ from fabric.colors import red, green
 from fabric.contrib import console
 from fabric.contrib.files import exists
 from functools import wraps
+
 import pytoml as toml
 import json
 import os
@@ -95,6 +96,11 @@ def _getAdditionalDockerCommands(container):
     for port in ports:
         additionalCommands.append("-p {port}".format(port=port))
 
+    # Labels
+    labels = container.get('labels', [])
+    for label in labels:
+        additionalCommands.append("-l {label}".format(label=label))
+
     # Other Commands
     cmds = container.get('cmds', [])
     for cmd in cmds:
@@ -137,19 +143,10 @@ def checkSettings(f):
         if not container:
             utils.abort("Need to set a container")
 
-        kwds_dic = {'container': container, 'stage': stage}
+        kwds['container'] = container
+        kwds['stage'] = stage
 
-        # Command
-        cmd = kwds.get('cmd', False)
-        if cmd:
-            kwds_dic['cmd'] = cmd
-
-        # Commands
-        commands = kwds.get('commands', False)
-        if cmd:
-            kwds_dic['commands'] = commands
-
-        return f(*args, **kwds_dic)
+        return f(*args, **kwds)
     return wrapper
 
 
@@ -290,7 +287,7 @@ def deploy(stage, container):
 
     # Build Run Command
     command = [
-        "sudo",
+        'sudo' if env.sudo else '',
         "docker",
         "run",
         "--name {stage}_{containerName}_{deploy_time}".format(containerName=container['name'], stage=stage, deploy_time=deploy_time),
@@ -311,6 +308,11 @@ def deploy(stage, container):
 
     # Image
     command.append(containerImage)
+
+    # Add Run Options
+    cmds = container.get('options', [])
+    for cmd in cmds:
+        command.append(cmd)
 
     # Join Command
     command = " ".join(map(str, command))
@@ -333,10 +335,10 @@ def deploy(stage, container):
         execute(hook_after_deploy, image=containerImage, commands=list(additionalCommands))
 
     end = time.time()
-    duration = end - start
+    duration = int(end - start)
     minutes, seconds = divmod(duration, 60)
 
-    print green("Deployment completed in {minutes}:{seconds}".format(minutes=minutes, seconds=seconds))
+    print green("Deployment completed in {minutes}m:{seconds}s".format(minutes=minutes, seconds=seconds))
 
     return {'stage': stage, 'container': container}
 
@@ -355,7 +357,7 @@ def interactive(stage=False, container=False, cmd=False, commands=False, rebuild
 
     # Build Run Command
     command = [
-        "sudo",
+        'sudo' if env.sudo else '',
         "docker",
         "run",
         "-e CURRENT_RELEASE='{currentRelease}'".format(currentRelease=containerImage),
