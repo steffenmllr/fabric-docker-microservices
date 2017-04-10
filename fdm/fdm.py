@@ -248,7 +248,7 @@ def build(stage, container):
             # Check if the image exists
             exists = _run('docker images -q %s | awk \'{print $1}\'' % (tagName)).strip().splitlines()
             if len(exists) != 0:
-                print "\n" + red("Image {tagName} already exists, skip building".format(tagName=tagName)) + "\n"
+                if console.confirm("Image {tagName} already exists, skip building ?".format(tagName=tagName)):
                 return tagName
 
 
