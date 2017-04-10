@@ -249,7 +249,7 @@ def build(stage, container):
             exists = _run('docker images -q %s | awk \'{print $1}\'' % (tagName)).strip().splitlines()
             if len(exists) != 0:
                 if console.confirm("Image {tagName} already exists, skip building ?".format(tagName=tagName)):
-                return tagName
+                    return tagName
 
 
             command = " ".join(map(str, [
