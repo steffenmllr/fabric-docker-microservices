@@ -10,7 +10,7 @@ with open(path.join(here, 'Readme.md'), encoding='utf-8') as f:
 
 setup(
     name='fdm',
-    version='1.3.3',
+    version='1.4.0',
     description='An opinionated helper to deploy docker images',
     long_description=long_description,
     url='https://github.com/steffenmllr/fabric-docker-microservices',
@@ -26,6 +26,7 @@ setup(
     ],
     install_requires=[
         'Fabric',
-        'pytoml'
+        'pytoml',
+        'requests'
     ]
 )

@@ -2,7 +2,7 @@
 from fabric.api import env, task, run, local, cd, lcd, prompt, execute, sudo, roles, get, hide
 from fabric import utils
 from fabric.main import is_task_object
-from fabric.colors import red, green
+from fabric.colors import red, green, magenta
 from fabric.contrib import console
 from fabric.contrib.files import exists
 from functools import wraps
@@ -11,10 +11,13 @@ import pytoml as toml
 import json
 import os
 import time
-
+import requests
+import socket
+import ssl
+import datetime
 
 # Only show Tasks in this list
-__all__ = ['deploy', 'build', 'running', 'stage' '_run', 'interactive', 'backup_db']
+__all__ = ['deploy', 'build', 'running', 'stage' '_run', 'interactive', 'backup_db', 'test_redirects']
 
 # Configs
 #env.STAGES = []
@@ -451,4 +454,53 @@ def backup_db(stage, database, name):
         ]))
 
         local(restore_command)
+
+
+
+def test_redirects():
+    """
+    Tests the Redirects
+    """
+    stage = env.stage
+    if not stage:
+        utils.abort("Need to set a stage")
+
+    if not env.redirects:
+        utils.abort("You need to set the [[redirects]] in the stage config")
+
+    # Testing the Sites
+    for site in env.redirects:
+        utils.puts(magenta("Testing {num} redirects for {url}", bold=True).format(url=site['target_url'], num=len(site['site_urls'])))
+        for url in site['site_urls']:
+            try:
+                r = requests.get(url, verify=True)
+
+                # Test if we get a 200er, the wanted target url and check if we have some content
+                if r.status_code != 200 or r.url != site['target_url'] or len(r.content) < 1000:
+                    utils.abort((red("✗ {url} has wrong redirection or empty response").format(url=url)))
+
+                # If we have SSL we check how many days are left
+                info = "(ok) {url}".format(url=url)
+                if 'https' in url:
+                    hostname = url.replace("https://", "")
+                    ssl_date_fmt = r'%b %d %H:%M:%S %Y %Z'
+                    context = ssl.create_default_context()
+                    conn = context.wrap_socket(
+                        socket.socket(socket.AF_INET),
+                        server_hostname=hostname,
+                    )
+                    conn.settimeout(5.0)
+                    conn.connect((hostname, 443))
+                    ssl_info = conn.getpeercert()
+                    expires_at =  datetime.datetime.strptime(ssl_info['notAfter'], ssl_date_fmt)
+                    delta = abs((datetime.datetime.now()).date() - expires_at.date()).days
+                    info = info + " - SSL is valid for {delta} days".format(delta=delta)
+
+                # Print out report
+                utils.puts(green(info))
+
+            except Exception as error:
+                # Mostly can't connect or a ssl error
+                utils.abort((red("✗ {url} - {error}").format(url=url, error=error)))
+
 
