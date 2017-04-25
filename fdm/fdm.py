@@ -288,12 +288,19 @@ def deploy(stage, container):
         for runningContainer in runningContainers:
             _run('docker rm -f {container}'.format(container=runningContainer))
 
+
+    if container['displayName']:
+        displayName = "{stage}_{containerName}".format(stage=stage, containerName=container['displayName'])
+    else:
+        displayName = "{stage}_{containerName}_{deploy_time}".format(containerName=container['name'], stage=stage, deploy_time=deploy_time)
+
+
     # Build Run Command
     command = [
         'sudo' if env.sudo else '',
         "docker",
         "run",
-        "--name {stage}_{containerName}_{deploy_time}".format(containerName=container['name'], stage=stage, deploy_time=deploy_time),
+        "--name {displayName}".format(displayName=displayName),
         "-d",
         "-e CURRENT_RELEASE='{currentRelease}'".format(currentRelease=containerImage),
         "--restart=always",
