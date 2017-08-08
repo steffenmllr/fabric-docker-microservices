@@ -289,7 +289,7 @@ def deploy(stage, container):
             _run('docker rm -f {container}'.format(container=runningContainer))
 
 
-    if container['displayName']:
+    if 'displayName' in container:
         displayName = "{stage}_{containerName}".format(stage=stage, containerName=container['displayName'])
     else:
         displayName = "{stage}_{containerName}_{deploy_time}".format(containerName=container['name'], stage=stage, deploy_time=deploy_time)
