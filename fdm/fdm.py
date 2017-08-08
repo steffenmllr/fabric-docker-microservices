@@ -419,7 +419,6 @@ def backup_db(stage, database, name):
     backup_command = " ".join(map(str, [
         "PGPASSWORD={remotePassword}".format(remotePassword=database['remote_password']),
         "pg_dump",
-        "-i",
         "-p {port}".format(port=database['remote_port']),
         "-h {host}".format(host=database['remote_host']),
         "-U {user}".format(user=database['remote_user']),
