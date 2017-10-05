@@ -290,7 +290,7 @@ def deploy(stage, container):
 
 
     if 'displayName' in container:
-        displayName = "{stage}_{containerName}".format(stage=stage, containerName=container['displayName'])
+        displayName = "{containerName}".format(stage=stage, containerName=container['displayName'])
     else:
         displayName = "{stage}_{containerName}_{deploy_time}".format(containerName=container['name'], stage=stage, deploy_time=deploy_time)
 
