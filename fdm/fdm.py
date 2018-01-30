@@ -271,15 +271,17 @@ def build(stage, container):
 
 @checkSettings
 @task
-def deploy(stage, container):
+def deploy(stage, container, image=False, showStatus=True):
     """
     Build and restart a container: (fab settings:stage=staging,container=app_1 deploy)
     """
-    execute("status");
+    if showStatus:
+        execute("status");
+
     start = time.time()
 
     runningContainers = running(stage=stage, container=container)
-    containerImage = build(stage=stage, container=container)
+    containerImage = image or build(stage=stage, container=container)
     deploy_time = current_milli_time()
 
     # Stop Running container
@@ -480,7 +482,6 @@ def test_redirects():
         for url in site['site_urls']:
             try:
                 r = requests.get(url, verify=True)
-
                 # Test if we get a 200er, the wanted target url and check if we have some content
                 if r.status_code != 200 or r.url != site['target_url'] or len(r.content) < 1000:
                     utils.abort((red("✗ {url} has wrong redirection or empty response").format(url=url)))
