@@ -1,4 +1,4 @@
 # fabric-docker-microservices
-An opinionated helper to deploy docker images without a registry
+An opinionated helper to deploy docker images without a registry for fabric2
 
-`fab settings:stage=staging,container=app_1 deploy`
+`fab deploy --stage=staging --container=app_1`

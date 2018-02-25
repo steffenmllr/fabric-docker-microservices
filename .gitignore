@@ -6,3 +6,4 @@ tmp
 env
 fdm.egg-info/
 .direnv/
+sample/local

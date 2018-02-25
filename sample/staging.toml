@@ -1,5 +1,32 @@
-hosts = ['127.0.0.1']
-environment = "staging"
+[server]
+host = "server.de"
+user = "root"
+
+# Testing Redirects and SSL Certificates
+[[redirects]]
+target_url = "https://github.com/"
+site_urls = [
+    'http://github.de',
+    'http://www.github.com',
+    'https://www.github.com',
+]
+
+
+[database.localdb]
+image = "postgres:10"
+backup_dir="${pwd}/backup"
+
+remote_user="remote_user"
+remote_password="remote_password"
+remote_database="remote_database"
+remote_host="remote_host"
+remote_port="5432"
+
+local_user="local_user"
+local_database="local_database"
+local_password="local_password"
+local_port="5432"
+
 
 [containers.dnsdock]
 name = "dnsdock"
@@ -22,8 +49,10 @@ environments = [
 [containers.app_1]
 name = "app_1"
 build = "https://${GITHUB_USERNAME}:${GITHUB_TOKEN}@github.com/steffenmllr/cloaked-batman.git"
+branch = "master"
 code_dir = "${pwd}/local/app_1"
 hook_before_deploy="before_deploy"
+hook_atfer_deploy="after_deploy"
 environments = [
     "NODE_ENV=staging",
     "DNSDOCK_NAME=staging",
@@ -33,6 +62,7 @@ environments = [
 [containers.app_2]
 name = "app_1"
 build = "https://${GITHUB_USERNAME}:${GITHUB_TOKEN}@github.com/steffenmllr/cloaked-batman.git"
+branch = "master"
 code_dir = "${pwd}/local/app_2"
 environments = [
     "NODE_ENV=staging",

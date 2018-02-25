@@ -1,32 +1,50 @@
-# -*- coding: utf-8 -*-
-from fabric.api import env, task, run, local, cd, lcd, execute
-from fdm import *
-from fdm import deploy, settings, loadConfig
+import sys
+import os
+sys.path.append( os.path.join( os.path.dirname(__file__), os.path.pardir ) )
+from invoke import Collection, task
+from invoke.executor import Executor
+from fdm.fdm import *
 
-# Setup Stages
-env.STAGES = ['staging']
-env.configDir = "./"
 
-# Load the config
-loadConfig(stages=['staging'], configDir="./")
+@task
+def before_deploy(ctx, image, commands):
+    print(image)
+    print(commands)
 
-# Before Deploy Hook
-def before_deploy(image, commands):
-    print "before_deploy"
-    print image
-    print commands
 
-# Deploy multiple containers
-def deploy_all(stage=False):
-    execute("running", container="app_1")
-    execute("running", container="app_2")
+@task
+def after_deploy(ctx, image, commands):
+    print(image)
+    print(commands)
 
-# Only Show these commmands
-__all__ = [
-    'deploy',
-    'build',
-    'running',
-    'run',
-    'before_deploy',
-    'deploy_all'
-]
+@task
+def shell(ctx, stage="staging"):
+    runCommands = getRunCommand(ctx=ctx, container="app_1", stage=stage)
+    print(runCommands)
+
+
+# Needed To call Tasks from each other (before_deploy/after_deploy)
+# https://github.com/pyinvoke/invoke/issues/170#issuecomment-134927763
+namespace = Collection(
+    deploy,
+    shell,
+    redirects,
+    database,
+    interactive,
+    before_deploy,
+    after_deploy
+)
+
+def invoke_execute(context, command_name, **kwargs):
+    """
+    Helper function to make invoke-tasks execution easier.
+    """
+    results = Executor(namespace, config=context.config).execute((command_name, kwargs))
+    target_task = context.root_namespace[command_name]
+    return results[target_task]
+
+namespace.configure({
+    'configDir': "./",
+    'root_namespace': namespace,
+    'invoke_execute': invoke_execute,
+})

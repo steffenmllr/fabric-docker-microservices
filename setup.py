@@ -10,7 +10,7 @@ with open(path.join(here, 'Readme.md'), encoding='utf-8') as f:
 
 setup(
     name='fdm',
-    version='1.4.1',
+    version='2.0.0',
     description='An opinionated helper to deploy docker images',
     long_description=long_description,
     url='https://github.com/steffenmllr/fabric-docker-microservices',
@@ -22,11 +22,16 @@ setup(
         'Intended Audience :: Developers',
         'Topic :: Software Development :: Build Tools',
         'License :: OSI Approved :: MIT License',
-        'Programming Language :: Python :: 2.7'
+        'Programming Language :: Python :: 3.6'
+    ],
+    dependency_links = [
+        'git+https://github.com/fabric/fabric.git/@{version}#egg={package}-0'.format(package="fabric2", version="v2")
     ],
     install_requires=[
-        'Fabric3',
+        'fabric2',
         'pytoml',
-        'requests'
+        'requests',
+        'colorama',
+        'invocations'
     ]
 )
