@@ -6,13 +6,11 @@ from invoke.executor import Executor
 from fdm.fdm import *
 
 
-@task
 def before_deploy(ctx, image, commands):
     print(image)
     print(commands)
 
 
-@task
 def after_deploy(ctx, image, commands):
     print(image)
     print(commands)
@@ -30,21 +28,11 @@ namespace = Collection(
     shell,
     redirects,
     database,
-    interactive,
-    before_deploy,
-    after_deploy
+    interactive
 )
-
-def invoke_execute(context, command_name, **kwargs):
-    """
-    Helper function to make invoke-tasks execution easier.
-    """
-    results = Executor(namespace, config=context.config).execute((command_name, kwargs))
-    target_task = context.root_namespace[command_name]
-    return results[target_task]
 
 namespace.configure({
     'configDir': "./",
-    'root_namespace': namespace,
-    'invoke_execute': invoke_execute,
+    'after_deploy': after_deploy,
+    'before_deploy': before_deploy
 })

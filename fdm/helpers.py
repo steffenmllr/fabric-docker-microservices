@@ -1,7 +1,8 @@
 import os
 from colorama import Fore
 from fabric import Connection
-from colorama import Style
+from invocations.console import confirm
+from colorama import Style, Fore, init, Back
 import pytoml as toml
 import json
 import time
@@ -12,7 +13,7 @@ import sys
 #
 # Helper Functions
 #
-def getConfig(configDir, stage):
+def getConfig(configDir, stage, connect=True):
     configPath = os.path.join(configDir, "{stage}.toml".format(stage=stage))
     try:
         with open(configPath, 'rb') as fin:
@@ -20,24 +21,87 @@ def getConfig(configDir, stage):
             dump = json.dumps(config)
             json_str = os.path.expandvars(dump)
             config = json.loads(json_str)
+            if connect:
+                # remote Connection
+                try:
+                    port = config['server']['port']
+                except:
+                    port = 22
 
-            # remote Connection
-            try:
-                port = config['server']['port']
-            except:
-                port = 22
+                host = config['server']['host']
+                user = config['server']['user']
 
-            host = config['server']['host']
-            user = config['server']['user']
-
-            print(Fore.YELLOW + '\n\n=====================================================')
-            print(Style.BRIGHT  + "🏰 Connecting to {user}@{host}:{port} - '{stage}'".format(user=user, host=host, port=port, stage=stage))
-            print(Fore.YELLOW + '=====================================================\n')
-            ctx = Connection(port=port, user=user, host=host)
-            return config, ctx
+                print(Fore.YELLOW + '\n\n=====================================================')
+                print(Style.BRIGHT  + "🏰 Connecting to {user}@{host}:{port} - '{stage}'".format(user=user, host=host, port=port, stage=stage))
+                print(Fore.YELLOW + '=====================================================\n')
+                remoteCtx = Connection(port=port, user=user, host=host)
+                return config, remoteCtx
+            else:
+                return config
 
     except FileNotFoundError:
         exitError("{configPath}' file not found".format(configPath=configPath))
+
+def getStatus(remoteCtx, config, stage):
+    for name in config['containers']:
+        cmd = 'docker ps | grep "%s_%s" | awk \'{print $1}\'' % (stage, config['containers'][name]['name'],)
+        runningContainers = remoteCtx.run(cmd).stdout.strip().splitlines()
+        if len(runningContainers) > 0:
+            print(Fore.GREEN + "{stage}_{name} is running {size} container".format(name=name, stage=stage, size=len(runningContainers)))
+        else:
+            print(Fore.RED + "{stage}_{name} is NOT running".format(name=name, stage=stage))
+
+def getRunning(remoteCtx, container, stage):
+    cmd = 'docker ps | grep "%s_%s" | awk \'{print $1}\'' % (stage, container['name'],)
+    return remoteCtx.run(cmd).stdout.strip().splitlines()
+
+def getBuild(remoteCtx, container, stage="staging"):
+
+    hasImage = container.get('image', None)
+    hasBuild = container.get('build', None)
+
+    if not hasImage and not hasBuild:
+        exitError("No image or build path defined")
+
+    if hasImage:
+        remoteCtx.run("docker pull {image}".format(image=hasImage))
+        return hasImage
+
+    # Setup
+    setup(remoteCtx=remoteCtx, container=container)
+
+    codeDir = container['code_dir']
+    branch = container['branch']
+
+    # Check out repo
+    with remoteCtx.cd(codeDir):
+        remoteCtx.run("git checkout {branch}".format(branch=branch))
+        remoteCtx.run("git reset --hard && git clean -d -x -f")
+        remoteCtx.run("git pull origin {branch}".format(branch=branch))
+
+        gitHash = remoteCtx.run("git describe --always", hide="out").stdout.strip()
+        tagName = "{containerName}/{stage}:{gitHash}".format(containerName=container['name'], gitHash=gitHash, stage=stage)
+        tagNameLastest = "{containerName}/{stage}:latest".format(containerName=container['name'], stage=stage)
+
+        # Check if the image exists
+        exists = remoteCtx.run('docker images -q %s | awk \'{print $1}\'' % (tagName)).stdout.strip().splitlines()
+        if len(exists) != 0:
+            print("\n\n")
+            if confirm(Back.GREEN + Fore.BLACK + "Image {tagName} already exists, skip building ?".format(tagName=tagName)):
+                return tagName
+
+
+        command = " ".join(map(str, [
+            "docker",
+            "build",
+            "--tag {tagName}".format(tagName=tagName),
+            "--tag {tagNameLastest}".format(tagNameLastest=tagNameLastest),
+            "."
+        ]))
+
+        remoteCtx.run(command)
+
+        return tagName
 
 
 def getContainer(config, container):
@@ -95,18 +159,15 @@ def getAdditionalDockerCommands(container):
     return additionalCommands
 
 
-def runInFolder(command, ctx, codeDir):
-    return ctx.run("cd {codeDir} && {command}".format(codeDir=codeDir, command=command))
-
-def setup(ctx, container):
+def setup(remoteCtx, container):
     codeDir = container['code_dir']
     branch = container['branch']
     url = container['build']
     try:
-        ctx.run("test -d {codeDir}".format(codeDir=codeDir), hide="both")
+        remoteCtx.run("test -d {codeDir}".format(codeDir=codeDir), hide="both")
     except:
-        ctx.run('rm -fr {codeDir}'.format(codeDir=codeDir))
-        ctx.run('git clone --branch={branch} --depth=1 {url} {codeDir}'.format(branch=container['branch'], url=container['build'], codeDir=codeDir))
+        remoteCtx.run('rm -fr {codeDir}'.format(codeDir=codeDir))
+        remoteCtx.run('git clone --branch={branch} --depth=1 {url} {codeDir}'.format(branch=container['branch'], url=container['build'], codeDir=codeDir))
 
 current_milli_time = lambda: int(round(time.time() * 1000))
 

@@ -1,6 +1,7 @@
 [server]
-host = "server.de"
+host = "server.com"
 user = "root"
+port = 22
 
 # Testing Redirects and SSL Certificates
 [[redirects]]
@@ -50,7 +51,7 @@ environments = [
 name = "app_1"
 build = "https://${GITHUB_USERNAME}:${GITHUB_TOKEN}@github.com/steffenmllr/cloaked-batman.git"
 branch = "master"
-code_dir = "${pwd}/local/app_1"
+code_dir = "/tmp/app_1"
 hook_before_deploy="before_deploy"
 hook_atfer_deploy="after_deploy"
 environments = [
