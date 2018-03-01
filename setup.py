@@ -24,11 +24,7 @@ setup(
         'License :: OSI Approved :: MIT License',
         'Programming Language :: Python :: 3.6'
     ],
-    dependency_links = [
-        'git+https://github.com/fabric/fabric.git/@{version}#egg={package}-0'.format(package="fabric2", version="v2")
-    ],
     install_requires=[
-        'fabric2',
         'pytoml',
         'requests',
         'colorama',
