@@ -1,7 +1,11 @@
+[config]
+env = '${pwd}/staging.env'
+
 [server]
 host = "server.com"
 user = "root"
 port = 22
+
 
 # Testing Redirects and SSL Certificates
 [[redirects]]

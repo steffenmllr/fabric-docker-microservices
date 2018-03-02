@@ -16,6 +16,7 @@ requests = "*"
 fabric = {git = "https://github.com/fabric/fabric.git", ref="v2", editable=true}
 colorama = "*"
 invocations = "*"
+python-dotenv = "*"
 
 
 [requires]

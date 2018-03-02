@@ -28,6 +28,7 @@ setup(
         'pytoml',
         'requests',
         'colorama',
+        'python-dotenv',
         'invocations'
     ]
 )

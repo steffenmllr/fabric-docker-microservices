@@ -21,6 +21,9 @@ def getConfig(configDir, stage, connect=True):
             dump = json.dumps(config)
             json_str = os.path.expandvars(dump)
             config = json.loads(json_str)
+            if config.env:
+                print(config.env)
+
             if connect:
                 # remote Connection
                 try:
