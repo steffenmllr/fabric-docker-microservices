@@ -1,5 +1,4 @@
-[config]
-env = '${pwd}/staging.env'
+dotenv = './staging.env'
 
 [server]
 host = "server.com"

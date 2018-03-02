@@ -9,6 +9,7 @@ import time
 import datetime
 import math
 import sys
+from dotenv import load_dotenv
 
 #
 # Helper Functions
@@ -18,11 +19,15 @@ def getConfig(configDir, stage, connect=True):
     try:
         with open(configPath, 'rb') as fin:
             config = toml.load(fin)
+            try:
+                env = config['dotenv']
+                load_dotenv(env, verbose=True)
+            except:
+                pass
+
             dump = json.dumps(config)
             json_str = os.path.expandvars(dump)
             config = json.loads(json_str)
-            if config.env:
-                print(config.env)
 
             if connect:
                 # remote Connection
