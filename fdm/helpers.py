@@ -98,14 +98,19 @@ def getBuild(remoteCtx, container, stage="staging"):
             if confirm(Back.GREEN + Fore.BLACK + "Image {tagName} already exists, skip building ?".format(tagName=tagName)):
                 return tagName
 
-
-        command = " ".join(map(str, [
+        builCommands = [
             "docker",
             "build",
             "--tag {tagName}".format(tagName=tagName),
-            "--tag {tagNameLastest}".format(tagNameLastest=tagNameLastest),
-            "."
-        ]))
+            "--tag {tagNameLastest}".format(tagNameLastest=tagNameLastest)
+        ]
+
+        buildArguments = container.get('build_args', [])
+        for command in buildArguments:
+            builCommands.append(command)
+
+        # Append Context
+        builCommands.append(".")
 
         remoteCtx.run(command)
 
