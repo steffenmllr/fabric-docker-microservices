@@ -112,6 +112,8 @@ def getBuild(remoteCtx, container, stage="staging"):
         # Append Context
         builCommands.append(".")
 
+        command = " ".join(map(str, builCommands))
+
         remoteCtx.run(command)
 
         return tagName
