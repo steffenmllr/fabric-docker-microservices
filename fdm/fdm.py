@@ -254,14 +254,22 @@ def build(stage, container):
                 if console.confirm("Image {tagName} already exists, skip building ?".format(tagName=tagName)):
                     return tagName
 
-
-            command = " ".join(map(str, [
+            builCommands = [
                 "docker",
                 "build",
                 "--tag {tagName}".format(tagName=tagName),
-                "--tag {tagNameLastest}".format(tagNameLastest=tagNameLastest),
-                "."
-            ]))
+                "--tag {tagNameLastest}".format(tagNameLastest=tagNameLastest)
+            ]
+
+            buildArguments = container.get('build_args', [])
+            for command in buildArguments:
+                builCommands.append(command)
+
+            # Append Context
+            builCommands.append(".")
+
+            # Make Command
+            command = " ".join(map(str, builCommands))
 
             with _cd(container.get('build_path', container['code_dir']) ):
                 _run(command)
